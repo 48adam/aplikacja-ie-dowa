@@ -43,7 +43,7 @@ void StockMarket::loadStocks() {
 
 }
 
-std::map<std::string, float> getPricesFromYahoo(const std::vector<std::string>& symbols) {
+std::map<std::string, float> StockMarket::getPricesFromYahoo(const std::vector<std::string>& symbols) {
     std::map<std::string, float> result;
 
     // Łączenie symboli do jednego ciągu, np. "AAPL,GOOG,MSFT"
@@ -154,6 +154,16 @@ std::string StockMarket::readSingleFileMultithreaded(std::vector<std::string>& p
 StockMarket::StockMarket() {
     this->filepath = std::filesystem::absolute("resources/stock_info.txt");
   //  this->loadStocks();
+}
+
+float StockMarket::getPriceForSymbol(const std::string& symbol) const
+{
+    for (const auto& stock : stocks) {
+        if (stock.getSymbol() == symbol) {
+            return stock.getCurrentPrice();
+        }
+    }
+    return 0.0f;
 }
 
 

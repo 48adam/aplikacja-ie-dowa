@@ -155,6 +155,78 @@ void window::inittexturerender()
 	this->backgroundSprite.setScale(scaleX, scaleY);
 }
 
+void window::renderPortfolioUI()
+{
+	if (portfolioNeedsRefresh) {
+		portfolio.loadFromFile(currentUser);  // załaduj na nowo dane
+		portfolioNeedsRefresh = false;
+	}
+
+	float windowWidth = this->okno->getSize().x;   // lub jaka faktycznie jest szerokość Twojego okna
+	float windowHeight = this->okno->getSize().y;
+
+
+	sf::RectangleShape panel;
+	panel.setSize(sf::Vector2f(windowWidth - 40.f, 200.f));
+	panel.setFillColor(sf::Color(230, 230, 230)); // jasnoszare tło
+	panel.setOutlineColor(sf::Color(150, 150, 150));
+	panel.setOutlineThickness(2.f);
+	panel.setPosition(20.f, windowHeight - 220.f); // przyklejone do dołu
+
+	this->okno->draw(panel);
+
+	float x = 30.f;
+	float y = windowHeight - 210.f;
+	float rowHeight = 24.f;
+
+	sf::Text header("POZYCJA	|	ILOSC	|	SR. CENA	|	CENA RYNKOWA	|	WARTOSC		|	ZYSK %", font, 14);
+	header.setPosition(x, y);
+	header.setFillColor(sf::Color::Black);
+	this->okno->draw(header);
+	y += rowHeight;
+
+	for (const auto& entry : portfolio.getEntries()) {
+		std::string ticker = entry.ticker;
+		int qty = entry.quantity;
+		float avg = entry.avgBuyPrice;
+		float marketPrice = market.getPriceForSymbol(ticker);
+		float total = marketPrice * qty;
+		float change = (marketPrice - avg) / avg * 100;
+
+
+		std::ostringstream ss;
+		ss.precision(2);
+		ss << std::fixed;
+		ss << ticker << " | " << qty << " | " << avg << " | " << marketPrice << " | " << total << " | " << change << "%";
+
+		sf::Text line(ss.str(), font, 14);
+		line.setPosition(x, y);
+		line.setFillColor(sf::Color::Black);
+		this->okno->draw(line);
+
+		y += rowHeight;
+	}
+	// suma portfela
+	float totalPortfolioValue = 0.f;
+	for (const auto& entry : portfolio.getEntries()) {
+		float marketPrice = market.getPriceForSymbol(entry.ticker);
+		totalPortfolioValue += marketPrice * entry.quantity;
+	}
+/*
+	//// Wartość całego portfela
+	//sf::Text totalText("Wartość portfela: " + std::to_string(static_cast<int>(totalPortfolioValue)) + " PLN", font, 16);
+	//totalText.setPosition(x, y + 10.f);
+	//totalText.setFillColor(sf::Color::Blue);
+	//this->okno->draw(totalText);
+
+	//// Saldo gotówki
+	//sf::Text cashText("Saldo: " + std::to_string(static_cast<int>(portfolio.getCash())) + " PLN", font, 16);
+	//cashText.setPosition(x, y + 34.f);
+	//cashText.setFillColor(sf::Color::Black);
+	//this->okno->draw(cashText);*/
+
+}
+
 void window::startUpdateThread() {
 	running1 = true;
 
@@ -195,6 +267,10 @@ window::~window()
 	if (updateThread.joinable()) {
 		updateThread.join();
 	}
+	if (wykresThread.joinable()) {
+		wykresThread.join();
+	}
+
 
 	delete this->okno;
 }
@@ -246,9 +322,13 @@ void window::processLoginOrRegister()
 	if (mode == LOGIN)
 	{
 		if (userManager.validateLogin(loginBuffer, passwordBuffer)) {
+
 			market.loadStocks();
 			market.update();
 			startUpdateThread();     // <-- uruchomienie osobnego wątku
+			currentUser = loginBuffer;
+			portfolio.loadFromFile(currentUser);
+
 			mode = MARKET_VIEW;
 		}
 
@@ -333,6 +413,63 @@ void window::pollEvent()
 				}
 
 			}
+			if (mode == MARKET_VIEW && wydarzenie.type == sf::Event::MouseButtonPressed) {
+				sf::Vector2f clickPos(
+					static_cast<float>(wydarzenie.mouseButton.x),
+					static_cast<float>(wydarzenie.mouseButton.y) + scrollY  // dodaj scroll
+				);
+				
+
+
+				const auto& stocks = market.getStocks();
+				size_t maxIndex = std::min(visibleStockIndex + stocksPerPage, stocks.size());
+				float lineSpacing = 600.f / static_cast<float>(stocksPerPage); // tak jak w renderze
+
+				for (size_t i = visibleStockIndex; i < maxIndex; ++i) {
+					const Stock& stock = stocks[i];
+					float y = 30.f + (i - visibleStockIndex) * lineSpacing;
+
+					// Prostokąt obszaru jednej akcji
+					sf::FloatRect akcjaRect(30.f, y - scrollY, 400.f, lineSpacing);
+
+					if (akcjaRect.contains(clickPos)) {
+						// Tylko jeśli kliknięto inną akcję niż ostatnio
+						if (stock.getSymbol() != selectedSymbol) {
+							selectedSymbol = stock.getSymbol();
+
+							if (wykresThread.joinable())
+								wykresThread.join();
+
+							std::string cmd = "python plot.py " + selectedSymbol;
+							std::system(cmd.c_str());
+
+							wykresThread = std::thread(&window::generujIWczytajWykres, this, selectedSymbol);
+						}
+
+						break;
+					}
+
+				}
+
+				// --- Przyciski Kup/Sprzedaj ---
+				if (!selectedSymbol.empty()) {
+					if (lastBuyRect.contains(clickPos)) {
+						float price = market.getPriceForSymbol(selectedSymbol);
+						portfolio.buyStock(selectedSymbol, price, 1);
+						portfolio.saveToFile(currentUser);
+						portfolioNeedsRefresh = true;
+
+					}
+					else if (lastSellRect.contains(clickPos)) {
+						float price = market.getPriceForSymbol(selectedSymbol);
+						portfolio.sellStock(selectedSymbol, price, 1);
+						portfolio.saveToFile(currentUser);
+						portfolioNeedsRefresh = true;
+
+					}
+				}
+			}
+
 			break;
 		}
 		case sf::Event::MouseWheelScrolled:
@@ -386,6 +523,23 @@ void window::okno_render()
 
 	this->okno->display();
 }
+void window::generujIWczytajWykres(const std::string& symbol) {
+	if (symbol.empty()) {
+		std::cout << "[WĄTEK] Błąd: symbol jest pusty — nie uruchamiam plot.py\n";
+		return;
+	}
+	std::string cmd = "python plot.py " + symbol;
+	std::system(cmd.c_str());  // tylko generowanie obrazu w tle
+	// Sygnał dla głównego wątku: obraz gotowy do załadowania
+	std::cout << "[WĄTEK] Uruchamiam: " << cmd << std::endl;
+
+	
+		std::lock_guard<std::mutex> lock(wykresMutex);
+		this->wykresGotowy = true;
+	
+}
+
+
 // Fragment renderMarketUI z ramką i przewijaniem
 void window::renderMarketUI(sf::RenderTarget& target)
 {
@@ -394,23 +548,17 @@ void window::renderMarketUI(sf::RenderTarget& target)
 	contentTexture.create(400, 600); // rozmiar taki jak ramki
 	contentTexture.clear(sf::Color::White); // tło białe
 
-
 	const auto& stocks = market.getStocks();
 	size_t maxIndex = std::min(visibleStockIndex + stocksPerPage, stocks.size());
 
 	float ramkaHeight = 600.f;
 	float lineSpacing = ramkaHeight / static_cast<float>(stocksPerPage); // np. 60px przy 10 akcjach
-	float y = 30.f;
 
 	for (size_t i = visibleStockIndex; i < maxIndex; ++i) {
-		const auto& stock = stocks[i];
+		const Stock& stock = stocks[i];
+		float y = 30.f + (i - visibleStockIndex) * lineSpacing;
 
-		sf::Text text;
-		text.setFont(this->font);
-		text.setCharacterSize(18);
-		text.setFillColor(sf::Color::Black);
-		text.setPosition(10.f, y);
-
+		// === Rysowanie tekstu akcji ===
 		float change = stock.getCurrentPrice() - stock.getPreviousPrice();
 		float changePercent = (change / stock.getPreviousPrice()) * 100.0f;
 
@@ -420,10 +568,59 @@ void window::renderMarketUI(sf::RenderTarget& target)
 			<< (change >= 0 ? "+" : "") << std::fixed << std::setprecision(2)
 			<< changePercent << "%)";
 
-		text.setString(ss.str());
-		contentTexture.draw(text);
+		sf::Text textAkcji;
+		textAkcji.setFont(this->font);
+		textAkcji.setCharacterSize(18);
+		textAkcji.setFillColor(sf::Color::Black);
+		textAkcji.setPosition(10.f, y);
+		textAkcji.setString(ss.str());
+		contentTexture.draw(textAkcji);
 
-		y += lineSpacing;
+		// === Jeśli kliknięto tę akcję – narysuj przyciski ===
+		if (stock.getSymbol() == selectedSymbol) {
+			if (this->wykresGotowy) {
+				std::lock_guard<std::mutex> lock(wykresMutex);
+
+				if (wykresTexture.loadFromFile("wykres.png")) {
+					wykresSprite.setTexture(wykresTexture);
+					wykresSprite.setPosition(460.f, 50.f);
+					wykresSprite.setScale(1.5f, 1.5f);
+					
+				}
+				this->wykresGotowy = false; // już załadowany
+			}
+
+			sf::RectangleShape buyButton(sf::Vector2f(80.f, 30.f));
+			buyButton.setFillColor(sf::Color::Green);
+			buyButton.setPosition(250.f, y); // dopasuj pozycję
+
+			sf::Text buyText("Kup", font, 16);
+			buyText.setPosition(260.f, y + 5.f);
+			buyText.setFillColor(sf::Color::Black);
+
+			sf::RectangleShape sellButton(sf::Vector2f(100.f, 30.f));
+			sellButton.setFillColor(sf::Color::Red);
+			sellButton.setPosition(335.f, y); // dopasuj pozycję
+
+			sf::Text sellText("Sprzedaj", font, 16);
+			sellText.setPosition(345.f, y + 5.f);
+			sellText.setFillColor(sf::Color::Black);
+
+			contentTexture.draw(buyButton);
+			contentTexture.draw(buyText);
+			contentTexture.draw(sellButton);
+			contentTexture.draw(sellText);
+
+			// Zapisz pozycje do kliknięcia
+			lastBuyRect = buyButton.getGlobalBounds();
+			lastBuyRect.top += 30.f - scrollY;
+			lastBuyRect.left += 30.f;
+
+			lastSellRect = sellButton.getGlobalBounds();
+			lastSellRect.top += 30.f - scrollY;
+			lastSellRect.left += 30.f;
+
+		}
 	}
 
 	contentTexture.display();
@@ -448,7 +645,23 @@ void window::renderMarketUI(sf::RenderTarget& target)
 	scrollbar.setFillColor(sf::Color(150, 150, 150));
 	scrollbar.setPosition(430.f, 30.f + scrollY);
 	target.draw(scrollbar);
+
+	// <=== DODAJ TO:
+	if (wykresSprite.getTexture()) {
+		target.draw(wykresSprite);
+	}
+	sf::Text cashText;
+	cashText.setFont(font);
+	cashText.setCharacterSize(20);
+	cashText.setFillColor(sf::Color::Black);
+	cashText.setString("Saldo: " + std::to_string(static_cast<int>(portfolio.getCash())) + " PLN");
+	cashText.setPosition(700.f, 10.f); // dopasuj do rozmiaru okna
+	target.draw(cashText);
+
+
+	renderPortfolioUI(); // <- na końcu
 }
+
 
 
 

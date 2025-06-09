@@ -13,6 +13,8 @@
 
 #include "UserManager.h"
 #include "StockMarket.h" 
+#include "PortfolioManager.h"
+
 
 
 
@@ -71,6 +73,28 @@ private:
 	std::thread updateThread;
 	std::atomic<bool> running1 = false;
 
+	//dotyczy klasy portfolio menager
+	PortfolioManager portfolio;
+	std::string currentUser;  // jeœli jeszcze nie istnieje
+
+	//dotyczy kupna akcji
+	std::string selectedSymbol = "";
+	sf::FloatRect lastBuyRect;
+	sf::FloatRect lastSellRect;
+	bool portfolioNeedsRefresh = false;
+
+
+	//dotyczy wykresu
+	sf::Texture wykresTexture;
+	sf::Sprite wykresSprite;
+	bool wykresGotowy = false;
+	std::thread wykresThread;
+	std::mutex wykresMutex;
+	std::string lastPlottedSymbol;
+
+
+
+
 	//prywatne funkcje
 	void initLoginPanelUI();
 	void initpanel();
@@ -92,6 +116,7 @@ public:
 	const bool running() const;
 
 	//funkcje 
+	void renderPortfolioUI();
 	void startUpdateThread();
 	void handleTextInput(const sf::Event& e);
 	void processLoginOrRegister();
@@ -100,6 +125,7 @@ public:
 	void renderowaniet³a();
 	void okno_update();
 	void okno_render();
+	void generujIWczytajWykres(const std::string& symbol);
 	void renderMarketUI(sf::RenderTarget& target);
 };
 

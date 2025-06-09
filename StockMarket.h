@@ -27,8 +27,9 @@ private:
 
 public:
     StockMarket();
-     void loadStocks();
-     float getPriceFromYahoo(const std::string& symbol);
+    float getPriceForSymbol(const std::string& symbol) const;
+    void loadStocks();
+    std::map<std::string, float> getPricesFromYahoo(const std::vector<std::string>& symbols);
     void update(); // aktualizuje ceny wszystkich akcji
     const std::vector<Stock>& getStocks() const;
     Stock* findStockBySymbol(const std::string& symbol);

@@ -5,9 +5,6 @@ class Stock {
 public:
     Stock(const std::string& symbol, const std::string& name, float currentPrice, float previousPrice);
 
-
-
-
     std::string getSymbol() const;
     std::string getName() const;
     float getCurrentPrice() const;
