@@ -1,7 +1,5 @@
-
-
 #include "StockMarket.h"
-
+#include <ranges>
 
 void StockMarket::loadStocks() {
     stocks.clear();
@@ -12,20 +10,14 @@ void StockMarket::loadStocks() {
     if (result != "OK") {
         std::cerr << "Błąd wczytywania danych: " << result << std::endl;
         return;
-    }
-
-    
+    }  
         auto parseLineToStock = [this](const std::string& line) {
             std::stringstream ss(line);
             std::string symbol, name, currentStr, previousStr;
-
-            
-
                 if (std::getline(ss, symbol, ',') &&
                     std::getline(ss, name, ',') &&
                     std::getline(ss, currentStr, ',') &&
                     std::getline(ss, previousStr)) {
-
                     try {
                         float current = std::stof(currentStr);
                         float previous = std::stof(previousStr);
@@ -34,7 +26,6 @@ void StockMarket::loadStocks() {
                     catch (const std::exception& e) {
                         std::cerr << "Błąd konwersji danych w linii: " << line << " | " << e.what() << std::endl;
                     } 
-                
             }
             };
        
@@ -142,7 +133,6 @@ std::string StockMarket::readSingleFileMultithreaded(std::vector<std::string>& p
             part2.push_back(allLines[i]);
         }
         });
-
     t1.join();
     t2.join();
 
@@ -182,9 +172,14 @@ void StockMarket::update() {
     }
 }
 
-const std::vector<Stock>& StockMarket::getStocks() const {
-    return stocks;
+std::vector<Stock> StockMarket::getStocksSortedBySymbol() const {
+    std::vector<Stock> sorted = stocks; // kopia
+    std::sort(sorted.begin(), sorted.end(), [](const Stock& a, const Stock& b) {
+        return a.getSymbol() < b.getSymbol();
+        });
+    return sorted;
 }
+
 
 Stock* StockMarket::findStockBySymbol(const std::string& symbol) {
     for (auto& stock : stocks) {

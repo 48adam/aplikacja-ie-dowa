@@ -31,7 +31,7 @@ public:
     void loadStocks();
     std::map<std::string, float> getPricesFromYahoo(const std::vector<std::string>& symbols);
     void update(); // aktualizuje ceny wszystkich akcji
-    const std::vector<Stock>& getStocks() const;
+    std::vector<Stock> getStocksSortedBySymbol() const;
     Stock* findStockBySymbol(const std::string& symbol);
 
 

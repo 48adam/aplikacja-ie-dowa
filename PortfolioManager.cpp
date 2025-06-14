@@ -20,7 +20,6 @@ bool PortfolioManager::buyStock(const std::string& symbol, float price, int quan
             return true;
         }
     }
-
     // jeœli to nowa akcja
     entries.push_back({ symbol, quantity, price });
     cash -= total;
@@ -28,14 +27,23 @@ bool PortfolioManager::buyStock(const std::string& symbol, float price, int quan
 }
 
 
-
 bool PortfolioManager::sellStock(const std::string& symbol, float price, int quantity) {
-    if (portfolio[symbol] >= quantity) {
-        portfolio[symbol] -= quantity;
-        cash += price * quantity;
-        return true;
+    for (auto it = entries.begin(); it != entries.end(); ++it) {
+        if (it->ticker == symbol) {
+            if (it->quantity < quantity)
+                return false; // za ma³o akcji do sprzedania
+
+            it->quantity -= quantity;
+            cash += price * quantity;
+
+            if (it->quantity == 0)
+                entries.erase(it); // usuñ z portfela, jeœli nic nie zosta³o
+
+            return true;
+        }
     }
-    return false;
+
+    return false; // akcja nieznaleziona
 }
 
 

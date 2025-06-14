@@ -2,8 +2,10 @@
 #include "okno.h"
 #include "UserManager.h"
 
+
 void window::initLoginPanelUI()
 {
+	
 	// Czcionka musi być już załadowana!
 	this->panelTitle.setFont(this->font);
 	this->panelTitle.setCharacterSize(28);
@@ -20,7 +22,7 @@ void window::initLoginPanelUI()
 	// Login label
 	this->loginLabel.setFont(this->font);
 	this->loginLabel.setCharacterSize(20);
-	this->loginLabel.setString("Login:");
+	this->loginLabel.setString("email:");
 	this->loginLabel.setFillColor(sf::Color::Black);
 	this->loginLabel.setPosition(
 		this->panel.getPosition().x + 30,
@@ -227,6 +229,8 @@ void window::renderPortfolioUI()
 
 }
 
+
+//dotyczy wądków 
 void window::startUpdateThread() {
 	running1 = true;
 
@@ -245,11 +249,10 @@ void window::startUpdateThread() {
 
 
 /// @brief Konstruktor klasy window – inicjalizuje wszystkie elementy okna
-window::window() : userManager("users.txt")
+window::window() : userManager("users.txt"), 
+xd("Aplikacja giełdowa autorstwa Adama Taborka!","resources/sansation.ttf", 14) // <-- dodane tu
 {
 
-
-	
 	this->initialiseVariable();
 	this->initWindow();
 	this->init_font();
@@ -323,12 +326,13 @@ void window::processLoginOrRegister()
 	{
 		if (userManager.validateLogin(loginBuffer, passwordBuffer)) {
 
+			xd.draw(*this->okno);
 			market.loadStocks();
 			market.update();
 			startUpdateThread();     // <-- uruchomienie osobnego wątku
 			currentUser = loginBuffer;
 			portfolio.loadFromFile(currentUser);
-
+			
 			mode = MARKET_VIEW;
 		}
 
@@ -418,15 +422,14 @@ void window::pollEvent()
 					static_cast<float>(wydarzenie.mouseButton.x),
 					static_cast<float>(wydarzenie.mouseButton.y) + scrollY  // dodaj scroll
 				);
-				
 
+				auto akcje = market.getStocksSortedBySymbol();
 
-				const auto& stocks = market.getStocks();
-				size_t maxIndex = std::min(visibleStockIndex + stocksPerPage, stocks.size());
+				size_t maxIndex = std::min(visibleStockIndex + stocksPerPage, akcje.size());
 				float lineSpacing = 600.f / static_cast<float>(stocksPerPage); // tak jak w renderze
 
 				for (size_t i = visibleStockIndex; i < maxIndex; ++i) {
-					const Stock& stock = stocks[i];
+					const Stock& stock = akcje[i];
 					float y = 30.f + (i - visibleStockIndex) * lineSpacing;
 
 					// Prostokąt obszaru jednej akcji
@@ -448,6 +451,13 @@ void window::pollEvent()
 
 						break;
 					}
+
+				}
+				sf::Vector2f pos(wydarzenie.mouseButton.x, wydarzenie.mouseButton.y);
+				if (logout && logout->handleClick(pos)) {
+					currentUser.clear();
+					mode = LOGIN;
+					logout.reset(); // wyczyść logout button
 
 				}
 
@@ -475,7 +485,7 @@ void window::pollEvent()
 		case sf::Event::MouseWheelScrolled:
 			if (wydarzenie.mouseWheelScroll.delta < 0) {
 				// scroll w dół
-				if (visibleStockIndex + stocksPerPage < market.getStocks().size())
+				if (visibleStockIndex + stocksPerPage < market.getStocksSortedBySymbol().size())
 					visibleStockIndex += stocksPerPage;
 			}
 			else if (wydarzenie.mouseWheelScroll.delta > 0) {
@@ -495,6 +505,7 @@ void window::pollEvent()
 void window::renderowanietła()
 {
 	this->okno->draw(backgroundSprite);
+	 xd.draw(*this->okno);
 
 }
 
@@ -508,18 +519,24 @@ void window::okno_update()
 /// @brief Główna funkcja rysująca – czyści, rysuje elementy i wyświetla
 void window::okno_render()
 {
-	if (mode == MARKET_VIEW)
+	if (mode == MARKET_VIEW){
 		this->okno->clear(sf::Color::White); // białe tło po zalogowaniu
+		logout = std::make_unique<StandardLogoutButton>(font, 1350, 10.f);
+		// np. prawy górny róg
+}
 	else {
 		this->okno->clear(sf::Color::Magenta);
 		this->renderowanietła(); // tylko w trybie logowania
 	}
 
-
 	if (mode == LOGIN || mode == REGISTER)
 		this->panelrysowanie(*this->okno);
-	else if (mode == MARKET_VIEW)
+	else if (mode == MARKET_VIEW) {
 		this->renderMarketUI(*this->okno);
+		if (logout) logout->render(*okno);
+
+
+	}
 
 	this->okno->display();
 }
@@ -539,7 +556,6 @@ void window::generujIWczytajWykres(const std::string& symbol) {
 	
 }
 
-
 // Fragment renderMarketUI z ramką i przewijaniem
 void window::renderMarketUI(sf::RenderTarget& target)
 {
@@ -548,14 +564,14 @@ void window::renderMarketUI(sf::RenderTarget& target)
 	contentTexture.create(400, 600); // rozmiar taki jak ramki
 	contentTexture.clear(sf::Color::White); // tło białe
 
-	const auto& stocks = market.getStocks();
-	size_t maxIndex = std::min(visibleStockIndex + stocksPerPage, stocks.size());
+	auto akcje = market.getStocksSortedBySymbol();
+	size_t maxIndex = std::min(visibleStockIndex + stocksPerPage, akcje.size());
 
 	float ramkaHeight = 600.f;
 	float lineSpacing = ramkaHeight / static_cast<float>(stocksPerPage); // np. 60px przy 10 akcjach
 
 	for (size_t i = visibleStockIndex; i < maxIndex; ++i) {
-		const Stock& stock = stocks[i];
+		const Stock& stock = akcje[i];
 		float y = 30.f + (i - visibleStockIndex) * lineSpacing;
 
 		// === Rysowanie tekstu akcji ===
@@ -661,9 +677,3 @@ void window::renderMarketUI(sf::RenderTarget& target)
 
 	renderPortfolioUI(); // <- na końcu
 }
-
-
-
-
-
-

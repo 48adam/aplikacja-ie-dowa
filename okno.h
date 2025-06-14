@@ -14,10 +14,9 @@
 #include "UserManager.h"
 #include "StockMarket.h" 
 #include "PortfolioManager.h"
-
-
-
-
+#include "LogoutRenderer.h"
+#include "StandardLogoutButton.h"
+#include "tekie_tam.h"
 
 class window 
 {
@@ -91,8 +90,12 @@ private:
 	std::thread wykresThread;
 	std::mutex wykresMutex;
 	std::string lastPlottedSymbol;
+	//log out
+	sf::Event event;
+	std::unique_ptr<LogoutRenderer> logout;
 
-
+	// okno.h
+	tekie_tam xd;
 
 
 	//prywatne funkcje

@@ -1,5 +1,6 @@
-
 #include "okno.h"
+
+
 
 
 int main() {
@@ -12,16 +13,13 @@ int main() {
     srand(static_cast<unsigned>(time(0)));
 
     while (okno.running()) {
+
         //update 
         okno.okno_update();
+
         //render
         okno.okno_render();
-
     }
     return 0;
 }
 
-/*
-to do 
-
-*/
